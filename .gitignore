@@ -1,0 +1,52 @@
+# Bhashara .gitignore
+
+# Cache and workspace data
+cache/
+cache_*
+tests/test_workspace/
+*.tmp
+
+# Media files & outputs
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wav
+*.mp3
+*.flac
+*.aac
+output/
+stems/
+
+# Secrets, keys, and tokens
+*token*
+*.token
+*.env
+*.env.*
+secrets/
+credentials/
+hf_token*
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+models/
+checkpoints/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
