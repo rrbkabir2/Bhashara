@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-11-16 - Local Web Studio & Browser Dubbing Interface
+
+### Added
+- **Local Web Studio (`run_ui.py`)**:
+  - FastAPI + Uvicorn backend strictly bound to `127.0.0.1:8000` with zero external tracking or authentication barriers.
+  - One-command launcher automatically boots server and opens the browser studio.
+- **Media Ingestion & Web Downloading**:
+  - Drag-and-drop file upload for local media (MP4, MKV, MOV, WebM).
+  - Online video link ingestion powered by `yt-dlp` (`/api/info`), pre-fetching video title, duration, and thumbnail preview.
+  - Plain-English error reporting for private, age-gated, geo-blocked, or live stream links.
+  - Length and CPU duration advisory banner requiring confirmation for videos $> 5$ minutes.
+- **Real-Time 10-Stage Progress Engine**:
+  - Thread-safe background `JobManager` coordinating FIFO job execution and single heavy job concurrency.
+  - Real-time progress updates per stage (`waiting`, `running`, `done`, `failed`) with active model, duration, and step description.
+  - Overall progress bar tied to disk verification (never hits 100% until final output files exist).
+  - Collapsible terminal streaming pipeline logs in real time.
+  - Clean job cancellation immediately halting pipeline execution and invoking `VRAMJanitor` memory reclamation.
+- **Synchronized Dual Video Player & Media Delivery**:
+  - Synchronized side-by-side player comparing original source video against dubbed Hindi/English video.
+  - Dedicated download endpoints (`/download/{job_id}/{file_type}`) for:
+    - Dubbed final video (`.mp4`)
+    - Master mixed audio (`.wav`)
+    - Isolated vocal dialogue stem (`.wav`)
+    - Isolated music and background sound effects stem (`.wav`)
+    - Multi-track subtitles (`.orig.srt`, `.translated.srt`, `.bilingual.srt`).
+- **Interactive Script Editor & Single-Line Re-dubbing**:
+  - Side-by-side transcript table showing detected timestamps, speakers, and editable Devanagari text.
+  - Single-line "Re-dub Line" button (`/api/jobs/{job_id}/redub`) re-synthesizing, re-fitting, and remuxing only the altered segment in seconds.
+  - Visual "Modified" status tags tracking edited lines.
+- **Job History & Cache Management**:
+  - Persistent job registry (`cache/job_history.json`) restoring job history across server reboots.
+  - Resumability endpoint (`/api/jobs/{job_id}/resume`) resuming failed/cancelled jobs from cached stage checkpoints.
+  - Live disk space breakdown and one-click intermediate cache cleaner (`/api/clean_temp`).
+
+---
+
 ## [1.0.1] - 2026-11-16 - Real Neural Models, Verification Suite & Git Sanitization
 
 ### Added

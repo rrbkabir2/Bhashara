@@ -142,11 +142,60 @@ python tests/test_differentiation.py
 
 ---
 
-## 🚀 Running the Web Studio
+## 🌐 Running the Local Web Studio
+
+Bhashara includes a browser-based local studio engineered with zero external tracking and complete localhost isolation (`127.0.0.1:8000`).
+
+### 1. Launch the Studio
+Run the single-command launcher:
 ```bash
-python ui/app.py
+python run_ui.py
 ```
-Open your browser at `http://127.0.0.1:7860`.
+This automatically starts the backend server and opens `http://127.0.0.1:8000` in your default browser.
+
+### 2. Studio Features
+- **Flexible Media Input:**
+  - Drag and drop any local video file (MP4, MKV, MOV, WebM).
+  - Paste any online video URL (YouTube, Vimeo, Twitter, etc.). Powered by `yt-dlp` with automatic pre-flight inspection (fetches thumbnail, title, duration) and clear error handling for geo-blocked, private, or age-gated videos.
+  - **Length & CPU Warning:** For videos longer than 5 minutes, displays estimated processing time and asks for confirmation.
+- **Real-Time 10-Stage Progress Engine:**
+  - Dynamic progress bar that only hits 100% when the final video is written to disk.
+  - Live status cards for all 10 stages (`waiting`, `running`, `done`, `failed`) displaying the active AI model, latency, and step descriptions.
+  - Collapsible live terminal console streaming stage logs.
+  - **Clean Cancellation:** One-click Cancel button immediately stops execution and invokes `VRAMJanitor` to reclaim memory.
+- **Synchronized Before/After Video Player:**
+  - Plays the original source video alongside the dubbed Hindi/English video side-by-side with synchronized scrub and playback controls.
+- **One-Click Asset Downloads:**
+  - Dubbed video (`.mp4`)
+  - Master mixed audio (`.wav`)
+  - Isolated dialogue vocals (`.wav`)
+  - Isolated background music and sound effects (`.wav`)
+  - Subtitles in original, translated Hindi, and bilingual side-by-side formats (`.srt`).
+- **Interactive Script & Line Re-dubbing Editor:**
+  - View every detected speech segment with exact start/end timestamps and assigned speaker profile.
+  - Edit any translated Devanagari line directly in the table or switch character voices.
+  - **"Re-dub Line" Button:** Granularly re-synthesizes and re-fits only that specific line and rebuilds the final master video in seconds without re-processing the entire video.
+- **Job History & Cache Management:**
+  - Persistent job history with resume capability for interrupted jobs.
+  - Live disk space breakdown (Cache, Uploads, Outputs).
+  - **"Clean Intermediate Cache" Button:** One-click cleanup of intermediate chunk WAVs while safely preserving all completed dubbed videos and audio files.
+
+---
+
+### 🌐 Network Dependency Transparency
+
+| Component | Offline Mode | Internet Required | Reason |
+| :--- | :--- | :--- | :--- |
+| **Local File Upload** | ✅ 100% Offline | ❌ No | Processed entirely on local CPU/GPU. |
+| **Online URL Ingestion** | ❌ Online | ✅ Yes | Uses `yt-dlp` to stream video from web. |
+| **Demucs Stem Separation** | ✅ 100% Offline | ❌ No (after cache) | PyTorch weights cached in hub directory. |
+| **Whisper Transcription** | ✅ 100% Offline | ❌ No (after cache) | `faster-whisper` CTranslate2 model runs locally. |
+| **MarianMT Translation** | ✅ 100% Offline | ❌ No (after cache) | Helsinki-NLP Opus-MT models execute locally. |
+| **WSOLA & Audio Fitting** | ✅ 100% Offline | ❌ No | Pure digital signal processing (`scipy`, `numpy`). |
+| **Sidechain Ducking & Mixer**| ✅ 100% Offline | ❌ No | Local DSP algorithms. |
+| **FFmpeg Demuxing & Muxing**| ✅ 100% Offline | ❌ No | Bundled static binary (`tools/ffmpeg.exe`). |
+| **Edge-TTS Synthesis** | ❌ Online | ✅ Yes | Streams high-fidelity neural voices (`hi-IN-MadhurNeural`, `hi-IN-SwaraNeural`). |
+| **XTTS-v2 / Offline Cloner**| ✅ 100% Offline | ❌ No (Milestone 2) | Full local zero-shot voice cloning engine. |
 
 ---
 

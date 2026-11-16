@@ -50,6 +50,38 @@ def get_ffmpeg_path() -> str:
     return "ffmpeg"
 
 
+def get_video_duration_sec(video_path: Path) -> float:
+    """Gets duration in seconds of a video or audio file using ffmpeg or soundfile."""
+    video_path = Path(video_path)
+    if not video_path.exists():
+        return 0.0
+
+    # Try soundfile for audio
+    if video_path.suffix.lower() in (".wav", ".flac", ".ogg"):
+        try:
+            import soundfile as sf
+            info = sf.info(str(video_path))
+            return float(info.duration)
+        except Exception:
+            pass
+
+    # Try FFmpeg binary
+    ffmpeg = get_ffmpeg_path()
+    try:
+        cmd = [ffmpeg, "-i", str(video_path)]
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in proc.stderr.splitlines():
+            if "Duration:" in line:
+                dur_part = line.split("Duration:")[1].split(",")[0].strip()
+                parts = dur_part.split(":")
+                if len(parts) == 3:
+                    return float(parts[0]) * 3600.0 + float(parts[1]) * 60.0 + float(parts[2])
+    except Exception:
+        pass
+
+    return 0.0
+
+
 def extract_audio_16k_mono(video_path: Path, output_wav: Path) -> Path:
     """Extracts 16kHz 16-bit mono PCM WAV for ASR and Diarization via FFmpeg."""
     output_wav.parent.mkdir(parents=True, exist_ok=True)

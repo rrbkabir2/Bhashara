@@ -35,8 +35,8 @@ def run_stage1_input(project: ProjectMetadata, project_dir: Path) -> ProjectMeta
     if src.startswith("http://") or src.startswith("https://"):
         logger.info(f"[Stage 1] Downloading link via yt-dlp: {src}")
         try:
-            cmd = ["yt-dlp", "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", "-o", str(local_video_path), src]
-            subprocess.run(cmd, check=True)
+            from bhashara.utils.ytdlp_utils import download_video
+            download_video(src, local_video_path)
         except Exception as e:
             raise RuntimeError(f"Failed to download video link with yt-dlp: {e}")
     else:

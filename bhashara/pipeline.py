@@ -142,7 +142,9 @@ class BhasharaDubber:
         self,
         project: ProjectMetadata,
         tts_engine: str = "auto",
-        enable_lipsync: bool = False
+        enable_lipsync: bool = False,
+        progress_callback: Optional[Any] = None,
+        cancel_check: Optional[Any] = None
     ) -> ProjectMetadata:
         """Executes all 10 stages strictly sequentially with diagnostic run logging."""
         logger.info("[Pipeline] Starting sequential execution...")
@@ -151,12 +153,19 @@ class BhasharaDubber:
 
         # Helper to execute and profile a stage
         def profile_stage(num: int, name: str, model: str, default_dev: str, func, *args):
+            if cancel_check and cancel_check():
+                VRAMJanitor.clean_vram("cancelled")
+                raise RuntimeError("Dubbing job was cancelled by user.")
+            if progress_callback:
+                progress_callback(num, name, "running", float((num - 1) * 10), f"Running {name} ({model})...")
             VRAMJanitor.reset_peak_stats()
             st0 = time.time()
             res = func(*args)
             dur = time.time() - st0
             peak_vram = VRAMJanitor.get_peak_vram_gb()
             dev = "cuda" if peak_vram > 0 else default_dev
+            if progress_callback:
+                progress_callback(num, name, "done", float(num * 10), f"Completed {name} in {dur:.1f}s")
             return res, dur, peak_vram, dev
 
         # Stage 1: Input & Audio Demux (CPU)
@@ -259,7 +268,9 @@ class BhasharaDubber:
         self,
         project: ProjectMetadata,
         tts_engine: str = "auto",
-        enable_lipsync: bool = False
+        enable_lipsync: bool = False,
+        progress_callback: Optional[Any] = None,
+        cancel_check: Optional[Any] = None
     ) -> ProjectMetadata:
         """
         Executes pipeline with CPU and GPU overlap queue.
@@ -270,14 +281,40 @@ class BhasharaDubber:
         logger.info("[Pipeline] Starting CPU/GPU overlapped execution...")
         t0 = time.time()
 
+        def check_cancelled():
+            if cancel_check and cancel_check():
+                VRAMJanitor.clean_vram("cancelled")
+                raise RuntimeError("Dubbing job was cancelled by user.")
+
         # Stages 1 to 5: Initial preparation
+        check_cancelled()
+        if progress_callback: progress_callback(1, "Input Demux", "running", 5.0, "Extracting audio...")
         project = run_stage1_input(project, self.project_dir)
+        if progress_callback: progress_callback(1, "Input Demux", "done", 10.0, "Audio extracted.")
+
+        check_cancelled()
+        if progress_callback: progress_callback(2, "Vocal Separation", "running", 15.0, "Splitting stems (Demucs)...")
         project = run_stage2_separation(project, self.project_dir)
+        if progress_callback: progress_callback(2, "Vocal Separation", "done", 25.0, "Stems isolated.")
+
+        check_cancelled()
+        if progress_callback: progress_callback(3, "Transcription", "running", 30.0, "Transcribing speech (faster-whisper)...")
         project = run_stage3_transcription(project, self.project_dir)
+        if progress_callback: progress_callback(3, "Transcription", "done", 40.0, f"Transcribed {len(project.segments)} lines.")
+
+        check_cancelled()
+        if progress_callback: progress_callback(4, "Diarization", "running", 42.0, "Clustering speakers...")
         project = run_stage4_diarization(project, self.project_dir)
+        if progress_callback: progress_callback(4, "Diarization", "done", 48.0, f"Profiled {len(project.speakers)} speakers.")
+
+        check_cancelled()
+        if progress_callback: progress_callback(5, "Translation", "running", 50.0, "Translating with syllable budget (MarianMT)...")
         project = run_stage5_translation(project, self.project_dir)
+        if progress_callback: progress_callback(5, "Translation", "done", 60.0, "Dialogue translated.")
 
         # Overlapped Stages 6 & 7 (TTS Producer on GPU -> Timing Fit Consumer on CPU)
+        check_cancelled()
+        if progress_callback: progress_callback(6, "Synthesis & Timing", "running", 62.0, "Synthesizing and fitting lines concurrently...")
         tts_dir = self.project_dir / "tts"
         tts_dir.mkdir(parents=True, exist_ok=True)
         aligned_dir = self.project_dir / "aligned"
@@ -369,15 +406,29 @@ class BhasharaDubber:
         project.stage_status["synthesis"] = "completed"
         project.stage_status["timing"] = "completed"
         project.save(self.segments_file)
+        if progress_callback: progress_callback(7, "Synthesis & Timing", "done", 80.0, "All dialogue synthesized and fitted.")
 
         # Stage 8: Ducked Mixing (CPU)
+        check_cancelled()
+        if progress_callback: progress_callback(8, "Ducked Mixing", "running", 82.0, "Sidechain ducking & -16 LUFS mastering...")
         project = run_stage8_mixer(project, self.project_dir)
+        if progress_callback: progress_callback(8, "Ducked Mixing", "done", 90.0, "Master audio ducked and normalized.")
 
         # Stage 9: Packaging & Muxing (CPU)
+        check_cancelled()
+        if progress_callback: progress_callback(9, "Muxing & Subtitles", "running", 92.0, "Muxing video & compiling subtitles...")
         project = run_stage9_output(project, self.project_dir)
+        if progress_callback: progress_callback(9, "Muxing & Subtitles", "done", 98.0, "Video remuxed with subtitles.")
 
         # Stage 10: Optional LipSync
-        project = run_stage10_lipsync(project, self.project_dir, enabled=enable_lipsync)
+        check_cancelled()
+        if enable_lipsync:
+            if progress_callback: progress_callback(10, "Lip Sync", "running", 99.0, "Running Wav2Lip sync...")
+            project = run_stage10_lipsync(project, self.project_dir, enabled=enable_lipsync)
+            if progress_callback: progress_callback(10, "Lip Sync", "done", 100.0, "Lip sync complete.")
+        else:
+            project = run_stage10_lipsync(project, self.project_dir, enabled=False)
+            if progress_callback: progress_callback(10, "Complete", "done", 100.0, "Dubbed video ready.")
 
         elapsed = time.time() - t0
         logger.info(f"[Pipeline] Overlapped run finished in {elapsed:.2f} seconds.")

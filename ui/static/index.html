@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bhashara - Local AI Video Dubbing Studio</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">🎙️</div>
+        <div class="brand-text">
+          <h1>Bhashara <span>भशारा</span></h1>
+          <p>Local AI Video Dubbing Studio (100% Offline & Private)</p>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-cpu" id="hw-badge">🖥️ Device: CPU Mode</span>
+        <span class="badge badge-status" id="active-queue-badge">Queue: Idle</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="app-tabs">
+      <button class="tab-btn active" data-tab="tab-dub">🎬 Dub Video</button>
+      <button class="tab-btn" data-tab="tab-player">📺 Players & Outputs</button>
+      <button class="tab-btn" data-tab="tab-editor">📝 Script Editor</button>
+      <button class="tab-btn" data-tab="tab-history">📜 Job History & Disk</button>
+    </nav>
+
+    <!-- TAB 1: DUB VIDEO -->
+    <section class="tab-content active" id="tab-dub">
+      <div class="grid-2col">
+        <!-- Input Panel -->
+        <div class="card input-card">
+          <h2>1. Video Input</h2>
+          <div class="input-mode-toggle">
+            <button class="mode-btn active" id="btn-mode-file">📁 Upload Video File</button>
+            <button class="mode-btn" id="btn-mode-url">🔗 Paste Video Link (YouTube)</button>
+          </div>
+
+          <!-- File Upload View -->
+          <div class="input-panel-section" id="section-file">
+            <div class="drop-zone" id="drop-zone">
+              <div class="drop-icon">📤</div>
+              <p>Drag & drop your video file here, or <span>Browse</span></p>
+              <input type="file" id="file-input" accept="video/mp4,video/mkv,video/avi,video/mov,audio/wav">
+              <span class="file-info" id="file-name-display">No file selected</span>
+            </div>
+          </div>
+
+          <!-- URL View -->
+          <div class="input-panel-section hidden" id="section-url">
+            <div class="url-input-group">
+              <input type="url" id="url-input" placeholder="https://www.youtube.com/watch?v=...">
+              <button class="btn btn-secondary" id="btn-fetch-info">Inspect Link</button>
+            </div>
+            <!-- Video Preview Card -->
+            <div class="url-preview-card hidden" id="url-preview-card">
+              <img id="preview-thumb" src="" alt="Thumbnail">
+              <div class="preview-details">
+                <h4 id="preview-title">Video Title</h4>
+                <p>Length: <strong id="preview-duration">0:00</strong></p>
+                <p>Estimated Dubbing Time (CPU): <strong id="preview-est-time">~2 mins</strong></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Plain Error Message Banner -->
+          <div class="alert alert-error hidden" id="input-error-alert"></div>
+
+          <!-- 5-Minute Warning Modal/Banner -->
+          <div class="alert alert-warning hidden" id="length-warning-banner">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-content">
+              <strong>Long Video Warning:</strong>
+              <p id="warning-text">This video is over 5 minutes. On CPU, dubbing will take a noticeable amount of time.</p>
+              <label class="checkbox-label">
+                <input type="checkbox" id="confirm-long-video"> I understand and want to proceed.
+              </label>
+            </div>
+          </div>
+
+          <!-- Settings -->
+          <h2 style="margin-top: 1.5rem;">2. Dubbing Settings</h2>
+          <div class="settings-grid">
+            <div class="form-group">
+              <label>Target Language</label>
+              <select id="select-target-lang">
+                <option value="hi" selected>Hindi (हिन्दी)</option>
+                <option value="en">English</option>
+                <option value="mr">Marathi (मराठी)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Source Language</label>
+              <select id="select-source-lang">
+                <option value="en" selected>Auto-detect (Default English)</option>
+                <option value="en">English (Force)</option>
+                <option value="hi">Hindi (Force)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="action-buttons">
+            <button class="btn btn-primary btn-large" id="btn-start-job">🚀 Start Dubbing</button>
+            <button class="btn btn-danger btn-large hidden" id="btn-cancel-job">⏹️ Cancel Job</button>
+          </div>
+        </div>
+
+        <!-- Progress Panel -->
+        <div class="card progress-card">
+          <div class="progress-header">
+            <h2>Live Pipeline Progress</h2>
+            <div class="timer-display">
+              <span>Elapsed: <strong id="timer-elapsed">00:00</strong></span> |
+              <span>ETA: <strong id="timer-eta">--:--</strong></span>
+            </div>
+          </div>
+
+          <!-- Overall Progress Bar -->
+          <div class="overall-progress-box">
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" id="overall-bar" style="width: 0%;"></div>
+            </div>
+            <div class="overall-progress-text">
+              <span id="overall-stage-label">Status: Idle</span>
+              <strong id="overall-percent">0%</strong>
+            </div>
+          </div>
+
+          <!-- 10 Stages Grid -->
+          <div class="stages-list" id="stages-list">
+            <!-- Dynamically populated 10 stages -->
+          </div>
+
+          <!-- Live Log Console Drawer -->
+          <div class="log-console-container">
+            <div class="log-console-header" id="log-toggle-btn">
+              <span>📜 Live Activity Log</span>
+              <span class="toggle-icon">▼</span>
+            </div>
+            <div class="log-console-body" id="log-console-body">
+              <pre id="log-content">System ready. Waiting for input...</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: PLAYERS & OUTPUTS -->
+    <section class="tab-content hidden" id="tab-player">
+      <div class="card">
+        <h2>🎬 Synchronized Before & After Video Comparison</h2>
+        <p class="section-desc">Listen to the original English audio alongside the new Hindi dubbed dialogue with preserved music and sound effects.</p>
+
+        <div class="video-compare-grid">
+          <div class="player-box">
+            <h3>Original Video</h3>
+            <video id="player-original" controls preload="metadata"></video>
+          </div>
+          <div class="player-box">
+            <h3>Bhashara Dubbed Video (Hindi)</h3>
+            <video id="player-dubbed" controls preload="metadata"></video>
+          </div>
+        </div>
+
+        <h2 style="margin-top: 2rem;">📥 Download Preserved Stems & Outputs</h2>
+        <div class="download-buttons-grid">
+          <a class="btn btn-download" id="dl-video" href="#" download>
+            <span class="btn-icon">🎬</span>
+            <div class="btn-text">
+              <strong>Dubbed Video</strong>
+              <small>Full 1080p/720p MP4 with Hindi audio</small>
+            </div>
+          </a>
+          <a class="btn btn-download" id="dl-audio" href="#" download>
+            <span class="btn-icon">🎵</span>
+            <div class="btn-text">
+              <strong>Dubbed Audio Only</strong>
+              <small>Mastered dialogue + music (-16 LUFS)</small>
+            </div>
+          </a>
+          <a class="btn btn-download" id="dl-vocals" href="#" download>
+            <span class="btn-icon">🎤</span>
+            <div class="btn-text">
+              <strong>Isolated Vocals</strong>
+              <small>Demucs extracted dialogue stem</small>
+            </div>
+          </a>
+          <a class="btn btn-download" id="dl-music" href="#" download>
+            <span class="btn-icon">🎸</span>
+            <div class="btn-text">
+              <strong>Music & Effects</strong>
+              <small>Original preserved instrumental stem</small>
+            </div>
+          </a>
+          <a class="btn btn-download" id="dl-sub-bilingual" href="#" download>
+            <span class="btn-icon">📝</span>
+            <div class="btn-text">
+              <strong>Bilingual Subtitles</strong>
+              <small>English & Hindi combined (.srt)</small>
+            </div>
+          </a>
+          <a class="btn btn-download" id="dl-sub-hindi" href="#" download>
+            <span class="btn-icon">🇮🇳</span>
+            <div class="btn-text">
+              <strong>Hindi Subtitles</strong>
+              <small>Translated Devanagari script (.srt)</small>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: SCRIPT EDITOR -->
+    <section class="tab-content hidden" id="tab-editor">
+      <div class="card">
+        <div class="editor-header">
+          <div>
+            <h2>📝 Interactive Transcript & Translation Editor</h2>
+            <p class="section-desc">Edit individual translated lines or change speaker assignments. Click <strong>"Re-dub Line"</strong> to re-synthesize and rebuild the final video in seconds.</p>
+          </div>
+          <div class="active-project-badge" id="editor-active-job">No Active Project</div>
+        </div>
+
+        <div class="editor-table-wrapper">
+          <table class="editor-table" id="editor-table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">Time</th>
+                <th style="width: 120px;">Speaker</th>
+                <th>Original English Transcript</th>
+                <th>Translated Hindi Dialogue (Editable)</th>
+                <th style="width: 140px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="editor-tbody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                  Run a dubbing job first or select a completed job from the History tab to edit lines.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: JOB HISTORY & DISK -->
+    <section class="tab-content hidden" id="tab-history">
+      <div class="card">
+        <div class="history-top">
+          <div>
+            <h2>📜 Previous Dubbing Jobs</h2>
+            <p class="section-desc">Completed, interrupted, and queued video dubbing projects.</p>
+          </div>
+          <button class="btn btn-secondary" id="btn-refresh-history">🔄 Refresh</button>
+        </div>
+
+        <div class="history-table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Title / Video</th>
+                <th>Target</th>
+                <th>Date</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <h2 style="margin-top: 2rem;">💾 Disk Storage & Cache Management</h2>
+        <div class="storage-card">
+          <div class="storage-stats">
+            <div>Total Used: <strong id="disk-total">0 MB</strong></div>
+            <div>Cache Stems: <strong id="disk-cache">0 MB</strong></div>
+            <div>Outputs: <strong id="disk-output">0 MB</strong></div>
+            <div>Uploads: <strong id="disk-uploads">0 MB</strong></div>
+          </div>
+          <button class="btn btn-secondary" id="btn-clean-disk">🧹 Clean Temporary Files (Keep Videos)</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
