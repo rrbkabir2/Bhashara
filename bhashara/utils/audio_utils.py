@@ -18,7 +18,13 @@ TRUE_PEAK_LIMIT = 0.891  # -1.0 dBTP in linear amplitude
 
 
 def get_ffmpeg_path() -> str:
-    """Finds the system ffmpeg or uses imageio_ffmpeg bundled binary."""
+    """Finds bundled tools/ffmpeg.exe, system ffmpeg, or imageio_ffmpeg binary."""
+    # 0. Check bundled tools/ffmpeg.exe
+    project_root = Path(__file__).resolve().parent.parent.parent
+    bundled = project_root / "tools" / "ffmpeg.exe"
+    if bundled.exists():
+        return str(bundled)
+
     # 1. System PATH
     ffmpeg_sys = shutil.which("ffmpeg")
     if ffmpeg_sys:
@@ -26,7 +32,7 @@ def get_ffmpeg_path() -> str:
         
     # 2. Check imageio_ffmpeg
     try:
-        import imageio_ffmpeg
+        import imageio_ffmpeg  # type: ignore
         return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         pass
@@ -68,7 +74,7 @@ def extract_audio_16k_mono(video_path: Path, output_wav: Path) -> Path:
 def load_audio(wav_path: Path) -> Tuple[np.ndarray, int]:
     """Loads audio file into float32 numpy array normalized to [-1.0, 1.0]."""
     try:
-        import soundfile as sf
+        import soundfile as sf  # type: ignore
         data, sr = sf.read(str(wav_path), dtype="float32")
         if data.ndim > 1:
             data = data.mean(axis=1)
@@ -92,7 +98,7 @@ def save_audio(wav_path: Path, data: np.ndarray, sr: int) -> None:
     # Clip to prevent distortion
     clipped = np.clip(data, -1.0, 1.0)
     try:
-        import soundfile as sf
+        import soundfile as sf  # type: ignore
         sf.write(str(wav_path), clipped, sr, subtype="PCM_16")
     except Exception:
         # Standard library wave fallback

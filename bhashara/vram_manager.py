@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from typing import Generator, Optional, Tuple
 
 try:
-    import torch
+    import torch  # type: ignore
 except ImportError:
     torch = None
 
@@ -44,6 +44,25 @@ class VRAMJanitor:
         except Exception as e:
             logger.warning(f"Could not query CUDA memory info: {e}")
             return 0.0, 0.0, 0.0
+
+    @classmethod
+    def get_peak_vram_gb(cls) -> float:
+        """Returns peak allocated CUDA VRAM in GB."""
+        if torch is not None and torch.cuda.is_available():
+            try:
+                return torch.cuda.max_memory_allocated() / (1024 ** 3)
+            except Exception:
+                return 0.0
+        return 0.0
+
+    @classmethod
+    def reset_peak_stats(cls) -> None:
+        """Resets peak CUDA memory tracking stats."""
+        if torch is not None and torch.cuda.is_available():
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except Exception:
+                pass
 
     @classmethod
     def clean_vram(cls, stage_name: str = "general") -> None:

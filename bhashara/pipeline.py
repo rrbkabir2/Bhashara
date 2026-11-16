@@ -34,6 +34,18 @@ from bhashara.stages.stage10_lipsync import run_stage10_lipsync
 logger = logging.getLogger("bhashara.pipeline")
 
 
+def _get_file_size_str(path: Optional[str]) -> str:
+    """Helper to return human readable file size string."""
+    if not path or not Path(path).exists():
+        return "N/A"
+    sz = Path(path).stat().st_size
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if sz < 1024.0:
+            return f"{sz:.1f} {unit}"
+        sz /= 1024.0
+    return f"{sz:.1f} TB"
+
+
 class BhasharaDubber:
     """Core dubbing orchestrator handling projects, cache, and state transitions."""
 
@@ -42,6 +54,63 @@ class BhasharaDubber:
         self.project_dir = cache_root / project_id
         self.project_dir.mkdir(parents=True, exist_ok=True)
         self.segments_file = self.project_dir / "segments.json"
+        self.run_log_entries: List[Dict[str, Any]] = []
+
+    def log_stage_run(
+        self,
+        stage_num: int,
+        stage_name: str,
+        model_name: str,
+        device: str,
+        input_desc: str,
+        output_desc: str,
+        duration_s: float,
+        peak_vram_gb: float
+    ):
+        """Records diagnostic metrics for a pipeline stage."""
+        entry = {
+            "stage": f"Stage {stage_num}: {stage_name}",
+            "model": model_name,
+            "device": device,
+            "input": input_desc,
+            "output": output_desc,
+            "duration": round(duration_s, 2),
+            "peak_vram": f"{peak_vram_gb:.2f} GB" if peak_vram_gb > 0 else "0.00 GB (CPU)"
+        }
+        self.run_log_entries.append(entry)
+
+    def print_and_save_run_log(self, total_time: float, mode: str = "Sequential"):
+        """Prints a structured ASCII run log table and persists to run_log.txt."""
+        lines = []
+        lines.append("=" * 115)
+        lines.append(f" 📊 BHASHARA DUBBING RUN LOG [{mode.upper()} MODE] - PROJECT: {self.project_id}")
+        lines.append("=" * 115)
+        lines.append(
+            f"{'STAGE':<26} | {'MODEL / ENGINE':<24} | {'DEVICE':<8} | {'TIME':<7} | {'PEAK VRAM':<12} | {'OUTPUT':<25}"
+        )
+        lines.append("-" * 115)
+        for e in self.run_log_entries:
+            lines.append(
+                f"{e['stage'][:26]:<26} | {e['model'][:24]:<24} | {e['device'][:8]:<8} | "
+                f"{e['duration']:>5.2f}s | {e['peak_vram']:<12} | {e['output'][:25]:<25}"
+            )
+        lines.append("=" * 115)
+        lines.append(f"  Total Pipeline Execution Time: {total_time:.2f} seconds")
+        lines.append("=" * 115)
+
+        log_content = "\n".join(lines)
+        print("\n" + log_content + "\n", flush=True)
+
+        # Save to project cache
+        run_log_path = self.project_dir / "run_log.txt"
+        with open(run_log_path, "w", encoding="utf-8") as f:
+            f.write(log_content + "\n")
+
+        # Save to proof folder if exists
+        proof_dir = PROJECT_ROOT if "PROJECT_ROOT" in globals() else self.project_dir.parent.parent / "proof"
+        if proof_dir.exists():
+            with open(proof_dir / "run_log.txt", "w", encoding="utf-8") as f:
+                f.write(log_content + "\n")
 
     def get_or_create_project(
         self,
@@ -75,42 +144,115 @@ class BhasharaDubber:
         tts_engine: str = "auto",
         enable_lipsync: bool = False
     ) -> ProjectMetadata:
-        """Executes all 10 stages strictly sequentially."""
+        """Executes all 10 stages strictly sequentially with diagnostic run logging."""
         logger.info("[Pipeline] Starting sequential execution...")
+        self.run_log_entries.clear()
         t0 = time.time()
 
+        # Helper to execute and profile a stage
+        def profile_stage(num: int, name: str, model: str, default_dev: str, func, *args):
+            VRAMJanitor.reset_peak_stats()
+            st0 = time.time()
+            res = func(*args)
+            dur = time.time() - st0
+            peak_vram = VRAMJanitor.get_peak_vram_gb()
+            dev = "cuda" if peak_vram > 0 else default_dev
+            return res, dur, peak_vram, dev
+
         # Stage 1: Input & Audio Demux (CPU)
-        project = run_stage1_input(project, self.project_dir)
+        project, d1, v1, dev1 = profile_stage(
+            1, "Input Demux", "FFmpeg Binary (Static)", "cpu",
+            run_stage1_input, project, self.project_dir
+        )
+        self.log_stage_run(1, "Input Demux", "FFmpeg 9.0.2", dev1,
+                           _get_file_size_str(project.source_video),
+                           f"audio_16k ({_get_file_size_str(project.audio_16k_mono)})", d1, v1)
 
-        # Stage 2: Demucs Vocal Separation (GPU)
-        project = run_stage2_separation(project, self.project_dir)
+        # Stage 2: Demucs Vocal Separation (GPU/CPU)
+        project, d2, v2, dev2 = profile_stage(
+            2, "Separation", "Demucs v4 (htdemucs)", "cpu",
+            run_stage2_separation, project, self.project_dir
+        )
+        self.log_stage_run(2, "Vocal Separation", "Demucs v4 (htdemucs)", dev2,
+                           _get_file_size_str(project.audio_16k_mono),
+                           f"stems ({_get_file_size_str(project.vocal_stem_path)})", d2, v2)
 
-        # Stage 3: faster-whisper Transcription (GPU)
-        project = run_stage3_transcription(project, self.project_dir)
+        # Stage 3: faster-whisper Transcription (GPU/CPU)
+        project, d3, v3, dev3 = profile_stage(
+            3, "Transcription", "faster-whisper base", "cpu",
+            run_stage3_transcription, project, self.project_dir
+        )
+        self.log_stage_run(3, "Transcription", "faster-whisper base", dev3,
+                           _get_file_size_str(project.vocal_stem_path),
+                           f"{len(project.segments)} segments in segments.json", d3, v3)
 
-        # Stage 4: Diarization & Voice Profiling (GPU/CPU)
-        project = run_stage4_diarization(project, self.project_dir)
+        # Stage 4: Diarization & Voice Profiling (CPU)
+        project, d4, v4, dev4 = profile_stage(
+            4, "Diarization", "Acoustic F0 Clustering", "cpu",
+            run_stage4_diarization, project, self.project_dir
+        )
+        self.log_stage_run(4, "Diarization", "Acoustic F0 Pyin", dev4,
+                           _get_file_size_str(project.vocal_stem_path),
+                           f"{len(project.speakers)} speakers profiled", d4, v4)
 
         # Stage 5: Syllable-Budgeted Translation (CPU)
-        project = run_stage5_translation(project, self.project_dir)
+        project, d5, v5, dev5 = profile_stage(
+            5, "Translation", "MarianMT (Helsinki-NLP)", "cpu",
+            run_stage5_translation, project, self.project_dir
+        )
+        self.log_stage_run(5, "Translation", "MarianMT Helsinki-NLP", dev5,
+                           f"{len(project.segments)} lines",
+                           "Syllable-budgeted Hindi", d5, v5)
 
-        # Stage 6: Voice Synthesis (GPU/VRAM)
-        project = run_stage6_synthesis(project, self.project_dir, preferred_engine=tts_engine)
+        # Stage 6: Voice Synthesis (GPU/VRAM or Edge-TTS)
+        tts_name = "Edge-TTS Neural" if tts_engine in ("auto", "edge_tts") else "Harmonic Preset"
+        project, d6, v6, dev6 = profile_stage(
+            6, "Voice Synthesis", tts_name, "cpu",
+            run_stage6_synthesis, project, self.project_dir, tts_engine
+        )
+        self.log_stage_run(6, "Synthesis", tts_name, dev6,
+                           f"{len(project.segments)} lines",
+                           f"tts/ ({len(list((self.project_dir / 'tts').glob('*.wav')))} clips)", d6, v6)
 
         # Stage 7: Timing Fit & Alignment (CPU)
-        project = run_stage7_timing_fit(project, self.project_dir)
+        project, d7, v7, dev7 = profile_stage(
+            7, "Timing Fit", "WSOLA + Pause Squeeze", "cpu",
+            run_stage7_timing_fit, project, self.project_dir
+        )
+        self.log_stage_run(7, "Timing Fit", "WSOLA SolaStretch", dev7,
+                           "tts/ clips",
+                           f"aligned/ ({len(list((self.project_dir / 'aligned').glob('*.wav')))} clips)", d7, v7)
 
         # Stage 8: Ducked Mixing & Loudness (CPU)
-        project = run_stage8_mixer(project, self.project_dir)
+        project, d8, v8, dev8 = profile_stage(
+            8, "Ducked Mixing", "Sidechain + EBU R128", "cpu",
+            run_stage8_mixer, project, self.project_dir
+        )
+        self.log_stage_run(8, "Ducked Mixer", "Sidechain Ducking -16LUFS", dev8,
+                           "stems + aligned/",
+                           f"mixed_dubbed ({_get_file_size_str(project.final_dubbed_audio_path)})", d8, v8)
 
         # Stage 9: Packaging & Muxing (CPU)
-        project = run_stage9_output(project, self.project_dir)
+        project, d9, v9, dev9 = profile_stage(
+            9, "Muxing & Output", "FFmpeg Binary (Static)", "cpu",
+            run_stage9_output, project, self.project_dir
+        )
+        self.log_stage_run(9, "Output Muxing", "FFmpeg Muxer", dev9,
+                           "mixed audio + source video",
+                           f"dubbed_video ({_get_file_size_str(project.final_dubbed_video_path)})", d9, v9)
 
         # Stage 10: Optional LipSync
-        project = run_stage10_lipsync(project, self.project_dir, enabled=enable_lipsync)
+        project, d10, v10, dev10 = profile_stage(
+            10, "Lip Sync", "Wav2Lip (Optional)", "cpu",
+            run_stage10_lipsync, project, self.project_dir, enable_lipsync
+        )
+        lipsync_out = project.lipsync_video_path if enable_lipsync else "Bypassed (Default OFF)"
+        self.log_stage_run(10, "Lip Sync", "Wav2Lip Checkpoint", dev10,
+                           "dubbed_video.mp4", lipsync_out, d10, v10)
 
         elapsed = time.time() - t0
         logger.info(f"[Pipeline] Sequential run finished in {elapsed:.2f} seconds.")
+        self.print_and_save_run_log(elapsed, mode="Sequential")
         return project
 
     def run_overlapped(
@@ -239,6 +381,7 @@ class BhasharaDubber:
 
         elapsed = time.time() - t0
         logger.info(f"[Pipeline] Overlapped run finished in {elapsed:.2f} seconds.")
+        self.print_and_save_run_log(elapsed, mode="Overlapped")
         return project
 
     def redub_single_line(

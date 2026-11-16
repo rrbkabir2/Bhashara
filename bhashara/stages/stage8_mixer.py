@@ -44,7 +44,10 @@ def run_stage8_mixer(project: ProjectMetadata, project_dir: Path) -> ProjectMeta
     logger.info("[Stage 8] Starting stems mixing, ducking, and -16 LUFS mastering...")
     
     # 1. Load instrumental stem (or base audio)
-    bgm_path = Path(project.instrumental_stem_path or project.audio_16k_mono)
+    bgm_source = project.instrumental_stem_path or project.audio_16k_mono
+    if not bgm_source:
+        raise ValueError("No background or input audio track found for mixing.")
+    bgm_path = Path(bgm_source)
     bgm_audio, sr = load_audio(bgm_path)
     total_samples = len(bgm_audio)
     

@@ -1,12 +1,72 @@
 # Bhashara .gitignore
 
-# Cache and workspace data
-cache/
-cache_*
-tests/test_workspace/
-*.tmp
+# ==============================================================================
+# 1. Secrets and sensitive files
+# ==============================================================================
+.env
+.env.*
+*.env
+*.token
+*token*
+*.key
+*.pem
+*.pfx
+*.p12
+hf_token*
+secrets/
+credentials/
+passwords*
+auth*
 
-# Media files & outputs
+# ==============================================================================
+# 2. Virtual environments, package caches, and compiled files
+# ==============================================================================
+.venv/
+venv/
+env/
+ENV/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dll
+*.dylib
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+pip-wheel-metadata/
+dist/
+build/
+*.egg-info/
+
+# ==============================================================================
+# 3. Model weights and downloads
+# ==============================================================================
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+models/
+checkpoints/
+.cache/
+huggingface/
+torch_cache/
+
+# ==============================================================================
+# 4. Generated and heavy media, test outputs, and binaries
+# ==============================================================================
+cache/
+cache_*/
+proof/
+output/
+stems/
+tests/test_workspace/
+tests/test_data/
+*.tmp
 *.mp4
 *.mkv
 *.avi
@@ -15,38 +75,22 @@ tests/test_workspace/
 *.mp3
 *.flac
 *.aac
-output/
-stems/
+*.m4a
+*.ogg
+*.srt
+*.vtt
 
-# Secrets, keys, and tokens
-*token*
-*.token
-*.env
-*.env.*
-secrets/
-credentials/
-hf_token*
+# Heavy bundled binaries (download via setup script)
+tools/
+tools/*.exe
 
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-*.pyc
-__pycache__/
-.pytest_cache/
-
-# Model weights
-*.pt
-*.pth
-*.onnx
-*.bin
-*.safetensors
-models/
-checkpoints/
-
-# IDE & OS files
-.vscode/
-.idea/
+# ==============================================================================
+# 5. Logs and system junk
+# ==============================================================================
+*.log
+run_log.txt
 .DS_Store
 Thumbs.db
+desktop.ini
+.vscode/
+.idea/

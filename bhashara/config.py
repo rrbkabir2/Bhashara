@@ -7,7 +7,7 @@ from pathlib import Path
 import os
 
 try:
-    import torch
+    import torch  # type: ignore
     DEVICE = "cuda" if (torch is not None and torch.cuda.is_available()) else "cpu"
 except ImportError:
     torch = None

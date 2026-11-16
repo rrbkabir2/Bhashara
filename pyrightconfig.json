@@ -1,0 +1,15 @@
+{
+  "include": [
+    "bhashara",
+    "tests",
+    "ui"
+  ],
+  "exclude": [
+    ".venv",
+    "cache",
+    "proof",
+    "tests/test_workspace"
+  ],
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": false
+}

@@ -8,6 +8,7 @@ Includes zero-login offline fallback.
 import logging
 import numpy as np
 from pathlib import Path
+from typing import Optional
 from bhashara.models.schema import ProjectMetadata, SpeakerProfile
 from bhashara.utils.audio_utils import load_audio, save_audio, estimate_pitch_f0
 
@@ -17,7 +18,7 @@ logger = logging.getLogger("bhashara.stage4")
 def run_stage4_diarization(
     project: ProjectMetadata,
     project_dir: Path,
-    hf_token: str = None
+    hf_token: Optional[str] = None
 ) -> ProjectMetadata:
     """
     Identifies speakers, classifies acoustic gender, and extracts clean reference WAVs.
@@ -28,7 +29,10 @@ def run_stage4_diarization(
         return project
 
     logger.info("[Stage 4] Starting speaker diarization & voice profiling...")
-    vocal_path = Path(project.vocal_stem_path or project.audio_16k_mono)
+    source_audio = project.vocal_stem_path or project.audio_16k_mono
+    if not source_audio:
+        raise ValueError("No vocal stem or audio found for diarization.")
+    vocal_path = Path(source_audio)
     audio_data, sr = load_audio(vocal_path)
 
     speakers_dir = project_dir / "speakers"

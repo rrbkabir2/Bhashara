@@ -29,7 +29,10 @@ def run_stage3_transcription(
         return project
 
     logger.info(f"[Stage 3] Starting speech transcription with faster-whisper ({model_size})...")
-    vocal_path = Path(project.vocal_stem_path or project.audio_16k_mono)
+    vocal_source = project.vocal_stem_path or project.audio_16k_mono
+    if not vocal_source:
+        raise ValueError("No vocal stem or input audio found for transcription.")
+    vocal_path = Path(vocal_source)
 
     segments_list: List[Segment] = []
     detected_lang = project.source_language
@@ -38,14 +41,17 @@ def run_stage3_transcription(
     with VRAMJanitor.stage_context("faster_whisper", required_vram_gb=1.8) as device:
         transcribed = False
         try:
-            from faster_whisper import WhisperModel
+            from faster_whisper import WhisperModel  # type: ignore
             
             compute_type = "float16" if device == "cuda" else "int8"
             logger.info(f"[Stage 3] Loading faster-whisper on {device} ({compute_type})...")
             model = WhisperModel(model_size, device=device, compute_type=compute_type)
             
+            # Load audio using soundfile to avoid PyAV 19 metadata_errors incompatibility
+            audio_data, sr = load_audio(vocal_path)
+            
             whisper_segments, info = model.transcribe(
-                str(vocal_path),
+                audio_data,
                 word_timestamps=True,
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=400)

@@ -43,6 +43,8 @@ def run_stage9_output(project: ProjectMetadata, project_dir: Path) -> ProjectMet
 
     # 2. FFmpeg Remux Video + Dubbed Audio
     src_video = Path(project.source_video)
+    if not project.final_dubbed_audio_path:
+        raise ValueError("Project final_dubbed_audio_path is not set.")
     master_audio = Path(project.final_dubbed_audio_path)
     
     ffmpeg_exe = get_ffmpeg_path()

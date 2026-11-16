@@ -30,7 +30,7 @@ logger = logging.getLogger("bhashara.ui")
 def create_gradio_app():
     """Builds the interactive Gradio UI."""
     try:
-        import gradio as gr
+        import gradio as gr  # type: ignore
     except ImportError:
         logger.warning("Gradio not installed. Install via `pip install gradio` to launch web UI.")
         return None

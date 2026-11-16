@@ -53,7 +53,7 @@ class EdgeTTSAdapter(BaseTTSAdapter):
         voice = self.VOICES.get((lang, gender), "hi-IN-MadhurNeural")
         
         try:
-            import edge_tts
+            import edge_tts  # type: ignore
             
             async def _run():
                 communicate = edge_tts.Communicate(text, voice)
@@ -128,7 +128,7 @@ class XTTSv2Adapter(BaseTTSAdapter):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with VRAMJanitor.stage_context("XTTS_Synthesis", required_vram_gb=2.5) as device:
             try:
-                from TTS.api import TTS
+                from TTS.api import TTS  # type: ignore
                 tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
                 tts.tts_to_file(
                     text=text,

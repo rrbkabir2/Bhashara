@@ -1,21 +1,24 @@
-# Core Runtime & Hardware Management
+# Bhashara Core Dependencies
 torch>=2.1.0
 numpy>=1.24.0
 scipy>=1.10.0
 pydantic>=2.0.0
 tqdm>=4.65.0
 
-# Media & DSP
+# Media Demuxing & DSP
 soundfile>=0.12.0
-librosa>=0.10.0
 imageio-ffmpeg>=0.4.8
 
-# Pipeline Models
+# Neural Pipeline Stages
+demucs>=4.0.0
+torchaudio>=2.1.0
 faster-whisper>=1.0.0
-yt-dlp>=2024.0.0
+transformers>=4.38.0
+sentencepiece>=0.2.0
+sacremoses>=0.1.0
 edge-tts>=6.1.0
 
-# Optional GUI & Advanced Voice Cloning
+# Optional Tools
+# yt-dlp>=2024.0.0
 # gradio>=4.0.0
-# TTS>=0.22.0  # Coqui XTTS-v2
 # pyannote.audio>=3.1.0
